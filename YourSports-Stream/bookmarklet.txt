@@ -1,0 +1,1 @@
+javascript:document.head.innerHTML='';document.body.innerHTML=document.getElementById('player').outerHTML;void(0)
