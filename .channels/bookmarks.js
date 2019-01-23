@@ -11,6 +11,16 @@ jQuery(document).ready(function($){
     data.push([href,name])
   })
 
+  data.sort(function(a, b){
+    let nameA = a[1].toLowerCase()
+    let nameB = b[1].toLowerCase()
+    return (nameA < nameB)
+      ? -1
+      : (nameA > nameB)
+        ? 1
+        : 0
+  })
+
   let md   = ''
   let html = ''
   let i
