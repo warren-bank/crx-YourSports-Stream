@@ -1,9 +1,9 @@
 {
   "name": "YourSports Stream",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Removes clutter and reduces CPU load.",
   "content_scripts": [{
-    "matches": ["*://yoursports.stream/live.php?v=*"],
+    "matches": ["*://*.yoursports.stream/*"],
     "all_frames": true,
     "run_at": "document_start",
     "js": ["content.js"]
