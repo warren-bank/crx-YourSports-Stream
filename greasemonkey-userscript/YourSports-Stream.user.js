@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Removes clutter and reduces CPU load.
-// @version      0.2.0
+// @version      0.3.0
 // @match        *://yoursports.stream/*
 // @icon         http://yoursports.stream/favicon.ico
 // @run-at       document-idle
@@ -43,6 +43,14 @@ var payload = function(){
       // iframe_holder.querySelector(':scope > [data-player] .player-poster.clickable').click()
     }
     catch(error){}
+  }
+  else if (path === '/') {
+    setTimeout(() => {
+      const list = window.document.body.classList
+      if (list.contains('pace-running')) {
+        list.replace('pace-running', 'pace-done')
+      }
+    }, 7500)
   }
 }
 
