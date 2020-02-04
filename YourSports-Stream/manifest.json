@@ -1,6 +1,6 @@
 {
   "name": "YourSports Stream",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Removes clutter and reduces CPU load.",
   "content_scripts": [{
     "matches": ["*://*.yoursports.stream/*"],

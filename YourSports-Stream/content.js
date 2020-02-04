@@ -26,6 +26,14 @@ var payload = function(){
     }
     catch(error){}
   }
+  else if (path === '/') {
+    setTimeout(() => {
+      const list = window.document.body.classList
+      if (list.contains('pace-running')) {
+        list.replace('pace-running', 'pace-done')
+      }
+    }, 7500)
+  }
 }
 
 var inject_function = function(_function){
