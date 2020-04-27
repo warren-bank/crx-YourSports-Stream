@@ -1,6 +1,6 @@
 ### [YourSports Stream](https://github.com/warren-bank/crx-YourSports-Stream/tree/greasemonkey-userscript)
 
-Removes clutter and reduces CPU load when watching video streams on the [_YourSports Stream_ website](http://yoursports.stream/).
+Removes clutter to reduce CPU load when watching video streams on the [_YourSports Stream_ website](http://yoursports.stream/). Can transfer video stream to alternate video players: WebCast-Reloaded, ExoAirPlayer.
 
 #### Summary:
 
