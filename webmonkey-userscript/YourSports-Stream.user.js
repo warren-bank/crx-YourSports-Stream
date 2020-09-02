@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Watch videos in external player.
-// @version      0.0.1
+// @version      0.0.2
 // @match        *://yoursports.stream/*
 // @match        *://*.yoursports.stream/*
 // @icon         http://yoursports.stream/favicon.ico
@@ -62,28 +62,59 @@ const get_referer_url = () => {
 // =============================================================================
 
 const process_iframe = () => {
-  let iframe = unsafeWindow.document.querySelector('iframe#player')
-  if (iframe)
-    iframe = iframe.getAttribute('src')
-  if (iframe)
-    unsafeWindow.location = iframe
-}
+  try {
+    const iFrame = unsafeWindow.document.querySelector('iframe#player')
+    if (!iFrame) throw ''
 
-// =============================================================================
+    const iWin = iFrame.contentWindow
+    if (!iWin) throw ''
 
-const process_page = () => {
-  const hls_url = get_hls_url()
-
-  if (hls_url) {
-    const extras = ['referUrl', get_referer_url()]
-
-    GM_startIntent(/* action= */ 'android.intent.action.VIEW', /* data= */ hls_url, /* type= */ 'application/x-mpegurl', /* extras: */ ...extras);
+    unsafeWindow = iWin
+    return true
   }
-  else {
-    process_iframe()
+  catch(e) {
+    return false
   }
 }
 
 // =============================================================================
 
-process_page()
+const process_page = (show_error) => {
+  let success = false
+
+  if (process_iframe()) {
+    const hls_url = get_hls_url()
+
+    if (hls_url) {
+      const extras = ['referUrl', get_referer_url()]
+
+      GM_startIntent(/* action= */ 'android.intent.action.VIEW', /* data= */ hls_url, /* type= */ 'application/x-mpegurl', /* extras: */ ...extras);
+      success = true
+    }
+  }
+
+  if (!success && show_error) {
+    const url_path = unsafeWindow.location.pathname.toLowerCase()
+
+    if ((url_path.indexOf('/live') === 0) || (url_path.indexOf('/ing/') === 0))
+      GM_toastShort('video not found')
+  }
+
+  return success
+}
+
+// =============================================================================
+
+let count = 15
+
+let timer = unsafeWindow.setInterval(
+  () => {
+    if (count <= 1) unsafeWindow.clearInterval(timer)
+    if (count <= 0) return
+    if (process_page((count === 1)))
+      count = 0
+    else
+      count--
+  },
+  1000
+)
