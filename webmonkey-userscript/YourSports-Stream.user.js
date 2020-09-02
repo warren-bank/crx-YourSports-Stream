@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Watch videos in external player.
-// @version      0.0.2
+// @version      1.0.0
 // @match        *://yoursports.stream/*
 // @match        *://*.yoursports.stream/*
 // @icon         http://yoursports.stream/favicon.ico
@@ -16,26 +16,60 @@
 // ==/UserScript==
 
 // =============================================================================
+/*
+ * page:   http://yoursports.stream/live?v=cnnnews
+ * iframe: view-source:http://yoursports.stream/ing/cnn
+ * source: var mustave = atob('base64 string...')
+ *
+ * page:   http://yoursports.stream/live?v=cbs
+ * iframe: view-source:http://yoursports.stream/ing/cbs
+ * source: var rbnhd = 'base64 string...';
+ *         ...,'source':{'hls':atob(rbnhd)}
+ */
 
 const get_hls_url = () => {
   if (unsafeWindow.mustave)
     return unsafeWindow.mustave
 
+  if (unsafeWindow.rbnhd)
+    return atob(unsafeWindow.rbnhd)
+
   let hls_url = null
 
   try {
-    const regex   = /\s*=\s*atob\('([^']+)'\)/
-    const scripts = [...unsafeWindow.document.querySelectorAll('script')]
-    let script, txt, matches
+    const scripts = [...unsafeWindow.document.querySelectorAll('script')].map(script => script.innerText)
 
-    while (!hls_url && scripts.length) {
-      script  = scripts.shift()
-      txt     = script.innerText
-      matches = regex.exec(txt)
+    const regexs  = [
+      /\s*=\s*atob\('([^']+)'\)/,
+      [
+        /['"]source['"]\s*:\s*\{\s*['"]hls['"]\s*:\s*atob\(rbnhd\)\s*\}/,
+        /var\s+rbnhd\s*=\s*['"]([^'"]+)['"]/
+      ]
+    ]
 
-      if ((matches !== null) && (matches.length >= 2)) {
-        let base64 = matches[1]
-        hls_url = atob(base64)
+    let i, j, regex_test, regex_match, script, matches
+
+    for (i=0; !hls_url && (i < regexs.length); i++) {
+      if(regexs[i] instanceof RegExp) {
+        regex_test  = regexs[i]
+        regex_match = regexs[i]
+      }
+      else if (Array.isArray(regexs[i]) && (regexs[i].length === 2)) {
+        regex_test  = regexs[i][0]
+        regex_match = regexs[i][1]
+      }
+
+      for (j=0; !hls_url && (j < scripts.length); j++) {
+        script = scripts[j]
+
+        if (regex_test.test(script)) {
+          matches = regex_match.exec(script)
+
+          if ((matches !== null) && (matches.length >= 2)) {
+            let base64 = matches[1]
+            hls_url = atob(base64)
+          }
+        }
       }
     }
   }
@@ -61,7 +95,11 @@ const get_referer_url = () => {
 
 // =============================================================================
 
+let is_iframe_processed = false
+
 const process_iframe = () => {
+  if (is_iframe_processed) return true
+
   try {
     const iFrame = unsafeWindow.document.querySelector('iframe#player')
     if (!iFrame) throw ''
@@ -70,6 +108,7 @@ const process_iframe = () => {
     if (!iWin) throw ''
 
     unsafeWindow = iWin
+    is_iframe_processed = true
     return true
   }
   catch(e) {
@@ -104,6 +143,25 @@ const process_page = (show_error) => {
 }
 
 // =============================================================================
+
+const remove_unnecessary_DOM = () => {
+  try {
+    const $       = window.jQuery
+    const $body   = $('body')
+    const $iframe = $('iframe#player')
+
+    if ($iframe.length === 1)
+      $body.empty().append($iframe)
+  }
+  catch(e) {}
+}
+
+// =============================================================================
+
+unsafeWindow.setTimeout(
+  remove_unnecessary_DOM,
+  5000
+)
 
 let count = 15
 
