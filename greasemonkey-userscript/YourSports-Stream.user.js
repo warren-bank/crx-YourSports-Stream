@@ -1,8 +1,11 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Removes clutter to reduce CPU load. Can transfer video stream to alternate video players: WebCast-Reloaded, ExoAirPlayer.
-// @version      0.4.1
+// @version      0.4.2
 // @match        *://yoursports.stream/*
+// @match        *://*.yoursports.stream/*
+// @match        *://findsports.stream/ustv.php*
+// @match        *://*.findsports.stream/ustv.php*
 // @icon         http://yoursports.stream/favicon.ico
 // @run-at       document-idle
 // @homepage     https://github.com/warren-bank/crx-YourSports-Stream/tree/greasemonkey-userscript
@@ -27,7 +30,7 @@ var payload = function(){
   const path  = window.location.pathname + window.location.search
   const regex = {
     iframe_holder: /^\/live(?:\.php)?\?v=/i,
-    iframe_page:   /^\/ing\//i
+    iframe_page:   /^\/(?:ing\/|ustv\.php)/i
   }
 
   if (regex.iframe_holder.test(path)) {
@@ -40,7 +43,7 @@ var payload = function(){
 
     // optionally, transfer video stream to alternate player
     if (window.redirect_to_webcast_reloaded) {
-      const get_hls_url = function(){
+      const get_raw_hls_url = function(){
         if (window.mustave) return window.mustave
 
         const regex   = /\s*=\s*atob\('([^']+)'\)/
@@ -57,6 +60,16 @@ var payload = function(){
             let base64 = matches[1]
             hls_url = atob(base64)
           }
+        }
+
+        return hls_url
+      }
+
+      const get_hls_url = function(){
+        let hls_url = get_raw_hls_url()
+
+        if (hls_url && (hls_url[0] === '/')) {
+          hls_url = window.location.protocol + '//' + window.location.host + hls_url
         }
 
         return hls_url
@@ -119,21 +132,6 @@ var payload = function(){
 
       process_video_url(get_hls_url())
     }
-
-    // otherwise, cleanup DOM
-    let iframe_holder = document.getElementById('player')
-
-    try {
-      ;[...iframe_holder.children].forEach(el => {
-        if (! el.hasAttribute('data-player')) el.remove()
-      })
-
-      // ================
-      // DOMException: play() failed because the user didn't interact with the document first
-      // ================
-      // iframe_holder.querySelector(':scope > [data-player] .player-poster.clickable').click()
-    }
-    catch(error){}
   }
   else if (path === '/') {
     setTimeout(() => {
