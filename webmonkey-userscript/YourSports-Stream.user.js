@@ -1,9 +1,13 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Watch videos in external player.
-// @version      1.0.0
+// @version      2.0.0
 // @match        *://yoursports.stream/*
 // @match        *://*.yoursports.stream/*
+// @match        *://yrsprts.stream/*
+// @match        *://*.yrsprts.stream/*
+// @match        *://findsports.stream/*
+// @match        *://*.findsports.stream/*
 // @icon         http://yoursports.stream/favicon.ico
 // @run-at       document-end
 // @homepage     https://github.com/warren-bank/crx-YourSports-Stream/tree/webmonkey-userscript/es6
@@ -18,45 +22,94 @@
 // =============================================================================
 /*
  * page:   http://yoursports.stream/live?v=cnnnews
- * iframe: view-source:http://yoursports.stream/ing/cnn
+ * iframe: view-source:http://yoursports.stream/ing/cnnnews
  * source: var mustave = atob('base64 string...')
  *
  * page:   http://yoursports.stream/live?v=cbs
  * iframe: view-source:http://yoursports.stream/ing/cbs
  * source: var rbnhd = 'base64 string...';
  *         ...,'source':{'hls':atob(rbnhd)}
+ *
+ * page:   http://yoursports.stream/live?v=espn
+ * iframe: view-source:http://yoursports.stream/ing/espn
+ * iframe: view-source:http://eu-33.findsports.stream/ustv.php?ch=espn
+ * source: var mustave = atob('base64 string...')
  */
+
+const regex = {
+  script_parsers: [
+    /\s*=\s*atob\('([^']+)'\)/,
+    [
+      /['"]source['"]\s*:\s*\{\s*['"]hls['"]\s*:\s*atob\(rbnhd\)\s*\}/,
+      /var\s+rbnhd\s*=\s*['"]([^'"]+)['"]/
+    ]
+  ],
+  url_parsers: {
+    path_pre:  /^https?:\/\/[^\/]+/i,
+    path_post: /[^\/]+$/,
+    host_pre:  /^https?:\/\//i,
+    is_base64: /^[-a-zA-Z0-9+/]+={0,3}$/
+  },
+  iframes: {
+    follow_path: /^\/(?:ing\/|ustv\.php)/i
+  }
+}
+
+const resolve_url = (url, determine_sameorigin) => {
+  if (regex.url_parsers.is_base64.test(url))
+    url = atob(url)
+
+  const resolved = {
+    href: url,
+    path: null
+  }
+
+  if (determine_sameorigin)
+    resolved.sameorigin = true
+
+  if (regex.url_parsers.path_pre.test(resolved.href)) {
+    // url includes protocol and host
+    resolved.path = resolved.href.replace(regex.url_parsers.path_pre, '')
+
+    if (determine_sameorigin)
+      resolved.sameorigin = (url.toLowerCase().replace(regex.url_parsers.host_pre, '').indexOf( unsafeWindow.location.host.toLowerCase() ) === 0)
+  }
+  else if (resolved.href[0] === '/') {
+    // url is an absolute path
+    resolved.path = resolved.href
+    resolved.href = unsafeWindow.location.protocol + '//' + unsafeWindow.location.host + resolved.path
+  }
+  else {
+    // url is a relative path
+    resolved.path = unsafeWindow.location.pathname.replace(regex.url_parsers.path_post, '') + resolved.href
+    resolved.href = unsafeWindow.location.protocol + '//' + unsafeWindow.location.host + resolved.path
+  }
+
+  return resolved
+}
 
 const get_hls_url = () => {
   if (unsafeWindow.mustave)
     return unsafeWindow.mustave
 
   if (unsafeWindow.rbnhd)
-    return atob(unsafeWindow.rbnhd)
+    return unsafeWindow.rbnhd
 
   let hls_url = null
 
   try {
     const scripts = [...unsafeWindow.document.querySelectorAll('script')].map(script => script.innerText)
 
-    const regexs  = [
-      /\s*=\s*atob\('([^']+)'\)/,
-      [
-        /['"]source['"]\s*:\s*\{\s*['"]hls['"]\s*:\s*atob\(rbnhd\)\s*\}/,
-        /var\s+rbnhd\s*=\s*['"]([^'"]+)['"]/
-      ]
-    ]
-
     let i, j, regex_test, regex_match, script, matches
 
-    for (i=0; !hls_url && (i < regexs.length); i++) {
-      if(regexs[i] instanceof RegExp) {
-        regex_test  = regexs[i]
-        regex_match = regexs[i]
+    for (i=0; !hls_url && (i < regex.script_parsers.length); i++) {
+      if(regex.script_parsers[i] instanceof RegExp) {
+        regex_test  = regex.script_parsers[i]
+        regex_match = regex.script_parsers[i]
       }
-      else if (Array.isArray(regexs[i]) && (regexs[i].length === 2)) {
-        regex_test  = regexs[i][0]
-        regex_match = regexs[i][1]
+      else if (Array.isArray(regex.script_parsers[i]) && (regex.script_parsers[i].length === 2)) {
+        regex_test  = regex.script_parsers[i][0]
+        regex_match = regex.script_parsers[i][1]
       }
 
       for (j=0; !hls_url && (j < scripts.length); j++) {
@@ -82,64 +135,43 @@ const get_hls_url = () => {
 
 // =============================================================================
 
-const get_referer_url = () => {
-  let referer_url
-  try {
-    referer_url = unsafeWindow.top.location.href
-  }
-  catch(e) {
-    referer_url = unsafeWindow.location.href
-  }
-  return referer_url
+const tunnel_into_iframe_window = (iFrame) => {
+  if (iFrame.contentWindow.document)
+    unsafeWindow = iFrame.contentWindow
 }
 
-// =============================================================================
-
-let is_iframe_processed = false
+const redirect_to_iframe = (resolved) => {
+  const urlFrame  = resolved.href
+  const urlParent = unsafeWindow.location.href
+  GM_loadUrl(urlFrame, 'Referer', urlParent)
+}
 
 const process_iframe = () => {
-  if (is_iframe_processed) return true
+  const iFrames = [...unsafeWindow.document.querySelectorAll('iframe')]
+  if (!iFrames.length) return false
 
-  try {
-    const iFrame = unsafeWindow.document.querySelector('iframe#player')
-    if (!iFrame) throw ''
+  let iFrame, urlFrame, resolved
+  for (let i=0; i < iFrames.length; i++) {
+    iFrame   = iFrames[i]
+    urlFrame = iFrame.getAttribute('src')
 
-    const iWin = iFrame.contentWindow
-    if (!iWin) throw ''
+    if (urlFrame) {
+      resolved = resolve_url(urlFrame)
 
-    unsafeWindow = iWin
-    is_iframe_processed = true
-    return true
-  }
-  catch(e) {
-    return false
-  }
-}
-
-// =============================================================================
-
-const process_page = (show_error) => {
-  let success = false
-
-  if (process_iframe()) {
-    const hls_url = get_hls_url()
-
-    if (hls_url) {
-      const extras = ['referUrl', get_referer_url()]
-
-      GM_startIntent(/* action= */ 'android.intent.action.VIEW', /* data= */ hls_url, /* type= */ 'application/x-mpegurl', /* extras: */ ...extras);
-      success = true
+      if (regex.iframes.follow_path.test(resolved.path)) {
+        try {
+          tunnel_into_iframe_window(iFrame)
+          return true
+        }
+        catch(e) {
+          redirect_to_iframe(resolved)
+          return false
+        }
+      }
     }
   }
 
-  if (!success && show_error) {
-    const url_path = unsafeWindow.location.pathname.toLowerCase()
-
-    if ((url_path.indexOf('/live') === 0) || (url_path.indexOf('/ing/') === 0))
-      GM_toastShort('video not found')
-  }
-
-  return success
+  return false
 }
 
 // =============================================================================
@@ -158,10 +190,36 @@ const remove_unnecessary_DOM = () => {
 
 // =============================================================================
 
-unsafeWindow.setTimeout(
-  remove_unnecessary_DOM,
-  5000
-)
+const process_page = (show_error) => {
+  while (process_iframe()) {}
+
+  let success = false
+
+  if (!success) {
+    const hls_url = get_hls_url()
+
+    if (hls_url) {
+      const resolved = resolve_url(hls_url)
+      const extras   = ['referUrl', unsafeWindow.location.href]
+
+      GM_startIntent(/* action= */ 'android.intent.action.VIEW', /* data= */ resolved.href, /* type= */ 'application/x-mpegurl', /* extras: */ ...extras);
+      success = true
+    }
+  }
+
+  if (!success && show_error) {
+    const url_path = unsafeWindow.location.pathname.toLowerCase()
+
+    if (url_path.indexOf('/live') === 0) {
+      remove_unnecessary_DOM()
+      GM_toastShort('video not found')
+    }
+  }
+
+  return success
+}
+
+// =============================================================================
 
 let count = 15
 
