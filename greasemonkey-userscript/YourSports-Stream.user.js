@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Removes clutter to reduce CPU load. Can transfer video stream to alternate video players: WebCast-Reloaded, ExoAirPlayer.
-// @version      0.4.2
+// @version      0.4.3
 // @match        *://yoursports.stream/*
 // @match        *://*.yoursports.stream/*
-// @match        *://findsports.stream/ustv.php*
-// @match        *://*.findsports.stream/ustv.php*
+// @match        *://yrsprts.stream/*
+// @match        *://*.yrsprts.stream/*
+// @match        *://findsports.stream/*
+// @match        *://*.findsports.stream/*
 // @icon         http://yoursports.stream/favicon.ico
 // @run-at       document-idle
 // @homepage     https://github.com/warren-bank/crx-YourSports-Stream/tree/greasemonkey-userscript
@@ -17,6 +19,24 @@
 // @copyright    Warren Bank
 // ==/UserScript==
 
+// =============================================================================
+/*
+ * page:   http://yoursports.stream/live?v=cnnnews
+ * iframe: view-source:http://yoursports.stream/ing/cnnnews
+ * source: var mustave = atob('base64 string...')
+ *
+ * page:   http://yoursports.stream/live?v=cbs
+ * iframe: view-source:http://yoursports.stream/ing/cbs
+ * source: var rbnhd = 'base64 string...';
+ *         ...,'source':{'hls':atob(rbnhd)}
+ *
+ * page:   http://yoursports.stream/live?v=espn
+ * iframe: view-source:http://yoursports.stream/ing/espn
+ * iframe: view-source:http://eu-33.findsports.stream/ustv.php?ch=espn
+ * source: var mustave = atob('base64 string...')
+ */
+
+// =============================================================================
 // https://www.chromium.org/developers/design-documents/user-scripts
 
 var user_options = {
@@ -29,61 +49,112 @@ var user_options = {
 var payload = function(){
   const path  = window.location.pathname + window.location.search
   const regex = {
-    iframe_holder: /^\/live(?:\.php)?\?v=/i,
-    iframe_page:   /^\/(?:ing\/|ustv\.php)/i
+    script_parsers: [
+      /\s*=\s*atob\('([^']+)'\)/,
+      [
+        /['"]source['"]\s*:\s*\{\s*['"]hls['"]\s*:\s*atob\(rbnhd\)\s*\}/,
+        /var\s+rbnhd\s*=\s*['"]([^'"]+)['"]/
+      ]
+    ],
+    url_parsers: {
+      path_pre:  /^https?:\/\/[^\/]+/i,
+      path_post: /[^\/]+$/,
+      host_pre:  /^https?:\/\//i,
+      is_base64: /^[-a-zA-Z0-9+/]+={0,3}$/
+    },
+    iframes: {
+      holder: /^\/live(?:\.php)?\?v=/i,
+      pages:  /^\/(?:ing\/|ustv\.php)/i
+    }
   }
 
-  if (regex.iframe_holder.test(path)) {
+  if (regex.iframes.holder.test(path)) {
     let iframe_html = document.getElementById('player').outerHTML
 
     document.head.innerHTML = ''
     document.body.innerHTML = iframe_html
   }
-  else if (regex.iframe_page.test(path)) {
+  else if (regex.iframes.pages.test(path)) {
 
     // optionally, transfer video stream to alternate player
     if (window.redirect_to_webcast_reloaded) {
-      const get_raw_hls_url = function(){
-        if (window.mustave) return window.mustave
 
-        const regex   = /\s*=\s*atob\('([^']+)'\)/
-        const scripts = [...document.querySelectorAll('script')]
-        let hls_url   = null
-        let script, txt, matches
+      const resolve_url = (url, determine_sameorigin) => {
+        if (regex.url_parsers.is_base64.test(url))
+          url = atob(url)
 
-        while (!hls_url && scripts.length) {
-          script  = scripts.shift()
-          txt     = script.innerText
-          matches = regex.exec(txt)
+        const resolved = {
+          href: url,
+          path: null
+        }
 
-          if ((matches !== null) && (matches.length >= 2)) {
-            let base64 = matches[1]
-            hls_url = atob(base64)
+        if (determine_sameorigin)
+          resolved.sameorigin = true
+
+        if (regex.url_parsers.path_pre.test(resolved.href)) {
+          // url includes protocol and host
+          resolved.path = resolved.href.replace(regex.url_parsers.path_pre, '')
+
+          if (determine_sameorigin)
+            resolved.sameorigin = (url.toLowerCase().replace(regex.url_parsers.host_pre, '').indexOf( window.location.host.toLowerCase() ) === 0)
+        }
+        else if (resolved.href[0] === '/') {
+          // url is an absolute path
+          resolved.path = resolved.href
+          resolved.href = window.location.protocol + '//' + window.location.host + resolved.path
+        }
+        else {
+          // url is a relative path
+          resolved.path = window.location.pathname.replace(regex.url_parsers.path_post, '') + resolved.href
+          resolved.href = window.location.protocol + '//' + window.location.host + resolved.path
+        }
+
+        return resolved
+      }
+
+      const get_hls_url = () => {
+        if (window.mustave)
+          return window.mustave
+
+        if (window.rbnhd)
+          return window.rbnhd
+
+        let hls_url = null
+
+        try {
+          const scripts = [...window.document.querySelectorAll('script')].map(script => script.innerText)
+
+          let i, j, regex_test, regex_match, script, matches
+
+          for (i=0; !hls_url && (i < regex.script_parsers.length); i++) {
+            if(regex.script_parsers[i] instanceof RegExp) {
+              regex_test  = regex.script_parsers[i]
+              regex_match = regex.script_parsers[i]
+            }
+            else if (Array.isArray(regex.script_parsers[i]) && (regex.script_parsers[i].length === 2)) {
+              regex_test  = regex.script_parsers[i][0]
+              regex_match = regex.script_parsers[i][1]
+            }
+
+            for (j=0; !hls_url && (j < scripts.length); j++) {
+              script = scripts[j]
+
+              if (regex_test.test(script)) {
+                matches = regex_match.exec(script)
+
+                if ((matches !== null) && (matches.length >= 2)) {
+                  let base64 = matches[1]
+                  hls_url = atob(base64)
+                }
+              }
+            }
           }
         }
-
-        return hls_url
-      }
-
-      const get_hls_url = function(){
-        let hls_url = get_raw_hls_url()
-
-        if (hls_url && (hls_url[0] === '/')) {
-          hls_url = window.location.protocol + '//' + window.location.host + hls_url
-        }
-
-        return hls_url
-      }
-
-      const get_referer_url = function() {
-        let referer_url
-        try {
-          referer_url = top.location.href
-        }
         catch(e) {
-          referer_url = window.location.href
+          hls_url = null
         }
-        return referer_url
+
+        return hls_url
       }
 
       const get_webcast_reloaded_url = (hls_url, vtt_url, referer_url) => {
@@ -91,7 +162,7 @@ var payload = function(){
 
         encoded_hls_url       = encodeURIComponent(encodeURIComponent(btoa(hls_url)))
         encoded_vtt_url       = vtt_url ? encodeURIComponent(encodeURIComponent(btoa(vtt_url))) : null
-        referer_url           = referer_url ? referer_url : get_referer_url()
+        referer_url           = referer_url ? referer_url : window.location.href
         encoded_referer_url   = encodeURIComponent(encodeURIComponent(btoa(referer_url)))
 
         webcast_reloaded_base = {
@@ -123,10 +194,11 @@ var payload = function(){
       }
 
       const process_video_url = (hls_url) => {
-        if (hls_url && window.redirect_to_webcast_reloaded) {
-          // transfer video stream
+        if (hls_url) {
+          const resolved = resolve_url(hls_url)
 
-          redirect_to_url(get_webcast_reloaded_url(hls_url))
+          // transfer video stream
+          redirect_to_url(get_webcast_reloaded_url( resolved.href ))
         }
       }
 
