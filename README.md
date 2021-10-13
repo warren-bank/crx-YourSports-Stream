@@ -1,11 +1,18 @@
 ### [YourSports Stream](https://github.com/warren-bank/crx-YourSports-Stream/tree/greasemonkey-userscript)
 
-Removes clutter to reduce CPU load when watching video streams on the [_YourSports Stream_ website](http://yoursports.stream/). Can transfer video stream to alternate video players: WebCast-Reloaded, ExoAirPlayer.
+[Userscript](https://github.com/warren-bank/crx-YourSports-Stream/raw/greasemonkey-userscript/greasemonkey-userscript/YourSports-Stream.user.js) to run in:
+* the [Tampermonkey](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) web browser extension for Chrome/Chromium
 
-#### Summary:
+Its purpose is to:
+* redirect embedded videos from [`yoursports.stream/live?v=*`](http://yoursports.stream/) to an external player
+* remove clutter from [`yoursports.stream/live?v=*`](http://yoursports.stream/) pages to provide a clean interface
 
-[Greasemonkey userscript](https://github.com/warren-bank/crx-YourSports-Stream/raw/greasemonkey-userscript/greasemonkey-userscript/YourSports-Stream.user.js):
-* works on pages that are hosted at: [`yoursports.stream/*`](http://yoursports.stream/)
+#### Stale Branch:
+
+* this branch is no-longer maintained
+  - the [`webmonkey-userscript/es5`](https://github.com/warren-bank/crx-YourSports-Stream/tree/webmonkey-userscript/es5) branch:
+    * includes a userscript that provides enhanced functionality
+    * supports older browsers (ex: Android 4.x WebView)
 
 #### Legal:
 
