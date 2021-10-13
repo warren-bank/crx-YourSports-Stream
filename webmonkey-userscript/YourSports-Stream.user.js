@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YourSports Stream
 // @description  Watch videos in external player.
-// @version      2.1.0
+// @version      2.1.1
 // @match        *://yoursports.stream/*
 // @match        *://*.yoursports.stream/*
 // @match        *://yoursports.to/*
@@ -28,7 +28,9 @@
 var user_options = {
   "redirect_to_webcast_reloaded": true,
   "force_http":                   true,
-  "force_https":                  false
+  "force_https":                  false,
+
+  "emulate_webmonkey":            false
 }
 
 // ----------------------------------------------------------------------------- state
@@ -204,9 +206,9 @@ var regex = {
     ]
   ],
   url_parsers: {
-    path_pre:  /^https?:\/\/[^\/]+/i,
+    path_pre:  /^(?:https?:)?\/\/[^\/]+/i,
     path_post: /[^\/]+$/,
-    host_pre:  /^https?:\/\//i,
+    host_pre:  /^(?:https?:)?\/\//i,
     is_base64: /^[-a-zA-Z0-9+/]+={0,3}$/
   },
   iframes: {
@@ -229,6 +231,9 @@ var resolve_url = function(url, determine_sameorigin) {
   if (regex.url_parsers.path_pre.test(resolved.href)) {
     // url includes protocol and host
     resolved.path = resolved.href.replace(regex.url_parsers.path_pre, '')
+
+    if (resolved.href.substring(0, 2) === '//')
+      resolved.href = state.current_window.location.protocol + resolved.href
 
     if (determine_sameorigin)
       resolved.sameorigin = (url.toLowerCase().replace(regex.url_parsers.host_pre, '').indexOf( state.current_window.location.host.toLowerCase() ) === 0)
@@ -304,8 +309,7 @@ var tunnel_into_iframe_window = function(iFrame) {
 
 var redirect_to_iframe = function(resolved) {
   var urlFrame  = resolved.href
-  var urlParent = state.current_window.location.href
-  GM_loadUrl(urlFrame, 'Referer', urlParent)
+  GM_loadFrame(urlFrame, urlFrame)
 }
 
 var process_iframe = function() {
@@ -365,6 +369,8 @@ var process_page = function(show_error) {
 // ----------------------------------------------------------------------------- bootstrap: wait 1 sec after each failed attempt; timeout after 15x failed attempts
 
 var init = function() {
+  if (user_options.emulate_webmonkey && (unsafeWindow.top !== unsafeWindow.window)) return
+
   if (state.current_window !== null) return
 
   if ((typeof GM_getUrl === 'function') && (GM_getUrl() !== unsafeWindow.location.href)) return
