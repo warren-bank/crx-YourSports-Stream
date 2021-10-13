@@ -1,4 +1,4 @@
-### [YourSports Stream](https://github.com/warren-bank/crx-YourSports-Stream)
+### [YourSports Stream](https://github.com/warren-bank/crx-YourSports-Stream/tree/master)
 
 #### Summary:
 
@@ -14,6 +14,13 @@ Chromium browser extension:
 * after installation, an icons is added to the "Chrome toolbar"
   * there is no way for the extension to prevent this from happening
   * to hide ( but [not remove](https://superuser.com/questions/1048619) ) it, you can right-click on the icon and select: "Hide in Chrome menu"
+
+#### Stale Branch:
+
+* this branch is no-longer maintained
+  - the [`webmonkey-userscript/es5`](https://github.com/warren-bank/crx-YourSports-Stream/tree/webmonkey-userscript/es5) branch:
+    * includes a userscript that provides enhanced functionality
+    * supports older browsers (ex: Android 4.x WebView)
 
 #### Legal:
 
